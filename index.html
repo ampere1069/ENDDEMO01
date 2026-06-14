@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000">
+  <title>感謝聆聽 | Thank You — V55</title>
+
+  <!-- Cormorant Garamond: luxury display serif, completely different from V54 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet">
+
+  <!-- GSAP 3.13.0 — cdnjs CDN direct, no local vendor folder -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
+
+  <style>
+    /* ── Design Tokens ──────────────────────────────────────────── */
+    :root {
+      --void:      #000000;
+      --ink:       #ffffff;
+      --ink-60:    rgba(255,255,255,0.6);
+      --ink-20:    rgba(255,255,255,0.18);
+      --font-disp: 'Cormorant Garamond', 'Georgia', 'Times New Roman', serif;
+      --font-mono: 'Courier New', monospace;
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--void);
+    }
+
+    /* ── WebGL canvas (layer 0) ─────────────────────────────────── */
+    #gl {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      display: block;
+    }
+
+    /* ── Radial vignette — keeps text readable (layer 1) ────────── */
+    .vignette {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      background:
+        radial-gradient(ellipse 90% 70% at 50% 50%,
+          transparent 10%,
+          rgba(0,0,0,0.45) 55%,
+          rgba(0,0,0,0.88) 100%),
+        linear-gradient(180deg,
+          rgba(0,0,0,0.65) 0%,
+          transparent 18%,
+          transparent 82%,
+          rgba(0,0,0,0.70) 100%);
+    }
+
+    /* ── Subtle film grain (layer 2) ────────────────────────────── */
+    .grain {
+      position: fixed; inset: 0; z-index: 2; pointer-events: none;
+      opacity: 0.055;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.65'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+
+    /* ── Main stage (layer 3) ───────────────────────────────────── */
+    main {
+      position: relative; z-index: 3;
+      width: 100%; height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(1.5rem, 5vw, 5rem);
+      text-align: center;
+      gap: 0;
+    }
+
+    /* ── Label ──────────────────────────────────────────────────── */
+    .label {
+      font-family: var(--font-mono);
+      font-size: clamp(0.52rem, 0.9vw, 0.68rem);
+      letter-spacing: 0.38em;
+      text-transform: uppercase;
+      color: var(--ink-20);
+      opacity: 0;
+      margin-bottom: clamp(1.5rem, 3.5vw, 3rem);
+    }
+
+    /* ── Horizontal rule (draws left-to-right) ──────────────────── */
+    .rule {
+      height: 1px;
+      background: var(--ink-20);
+      margin: 0 auto clamp(1.5rem, 3.5vw, 3rem);
+      /* scaleX starts at 0 via JS gsap.set */
+      width: clamp(48px, 10vw, 140px);
+      transform-origin: left center;
+    }
+
+    /* ── Chinese title: each character is a span ────────────────── */
+    .main-title {
+      margin: 0 0 clamp(0.8rem, 2vw, 1.5rem);
+      display: flex;
+      gap: clamp(0.04em, 0.4vw, 0.1em);
+      justify-content: center;
+      line-height: 1;
+      /* 3-D perspective for rotationX effect */
+      perspective: 800px;
+    }
+
+    .char {
+      display: inline-block;
+      font-family: var(--font-disp);
+      font-weight: 300;
+      font-size: clamp(4.5rem, 16vw, 13rem);
+      color: var(--ink);
+      opacity: 0;
+      /* GSAP will animate from rotationX: -80 */
+      transform-origin: 50% 100%;
+      /* Prevent FOUC – chars hidden before GSAP sets state */
+      visibility: hidden;
+    }
+
+    /* ── English italic subtitle ────────────────────────────────── */
+    .en-title {
+      font-family: var(--font-disp);
+      font-weight: 300;
+      font-style: italic;
+      font-size: clamp(1.1rem, 3.2vw, 2.4rem);
+      letter-spacing: 0.28em;
+      color: var(--ink-60);
+      opacity: 0;
+      margin-bottom: clamp(1.5rem, 3.5vw, 3rem);
+    }
+
+    /* ── Bottom rule ────────────────────────────────────────────── */
+    .rule-bottom {
+      height: 1px;
+      background: var(--ink-20);
+      margin: 0 auto;
+      width: clamp(48px, 10vw, 140px);
+      transform-origin: right center;
+    }
+
+    /* ── Reduced-motion: skip animations ───────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      .char { opacity: 1 !important; visibility: visible !important; transform: none !important; }
+      .label, .en-title { opacity: 1 !important; transform: none !important; }
+      .rule, .rule-bottom { transform: scaleX(1) !important; opacity: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- WebGL layer -->
+  <canvas id="gl" aria-hidden="true"></canvas>
+
+  <!-- Atmosphere layers -->
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain"    aria-hidden="true"></div>
+
+  <!-- Content -->
+  <main>
+    <p class="label" aria-hidden="true">2026 &middot; PRESENTATION END</p>
+    <div class="rule" role="separator" aria-hidden="true"></div>
+
+    <!-- aria-label gives screen readers the full phrase -->
+    <h1 class="main-title" aria-label="感謝聆聽">
+      <span class="char" aria-hidden="true">感</span>
+      <span class="char" aria-hidden="true">謝</span>
+      <span class="char" aria-hidden="true">聆</span>
+      <span class="char" aria-hidden="true">聽</span>
+    </h1>
+
+    <p class="en-title" lang="en">Thank You</p>
+    <div class="rule-bottom" role="separator" aria-hidden="true"></div>
+  </main>
+
+  <script>
+    /* ════════════════════════════════════════════════════════════════
+       WebGL — RGB Chromatic-Aberration Sine-Wave Shader
+       Derived from the Liquid Prism / 21st.dev reference.
+       Pure vanilla WebGL: no Three.js, no runtime requests, no npm.
+    ════════════════════════════════════════════════════════════════ */
+    (function initGL() {
+      var canvas = document.getElementById("gl");
+      var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+      if (!gl) return; /* graceful degradation: black background still shows */
+
+      /* ── Shaders ──────────────────────────────────────────────── */
+      var VERT = [
+        "attribute vec2 aPos;",
+        "void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }"
+      ].join("\n");
+
+      var FRAG = [
+        "precision highp float;",
+        "uniform vec2  uRes;",
+        "uniform float uTime;",
+        "uniform float uXScale;",
+        "uniform float uYScale;",
+        "uniform float uDist;",
+        "void main(){",
+        /* normalise coords to [-aspect, aspect] × [-1, 1] */
+        "  vec2 p = (gl_FragCoord.xy * 2.0 - uRes) / min(uRes.x, uRes.y);",
+        /* chromatic aberration: shift R and B channels horizontally */
+        "  float d  = length(p) * uDist;",
+        "  float rx = p.x * (1.0 + d);",
+        "  float gx = p.x;",
+        "  float bx = p.x * (1.0 - d);",
+        /* glow: brightness = 0.05 / distance to wave */
+        "  float r = 0.05 / abs(p.y + sin((rx + uTime) * uXScale) * uYScale);",
+        "  float g = 0.05 / abs(p.y + sin((gx + uTime) * uXScale) * uYScale);",
+        "  float b = 0.05 / abs(p.y + sin((bx + uTime) * uXScale) * uYScale);",
+        "  gl_FragColor = vec4(r, g, b, 1.0);",
+        "}"
+      ].join("\n");
+
+      function compileShader(type, src) {
+        var s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        return s;
+      }
+
+      var prog = gl.createProgram();
+      gl.attachShader(prog, compileShader(gl.VERTEX_SHADER,   VERT));
+      gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, FRAG));
+      gl.linkProgram(prog);
+      gl.useProgram(prog);
+
+      /* ── Full-screen quad (two triangles) ─────────────────────── */
+      var vbuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbuf);
+      gl.bufferData(gl.ARRAY_BUFFER,
+        new Float32Array([-1,-1,  1,-1,  -1,1,   1,-1,  1,1,  -1,1]),
+        gl.STATIC_DRAW);
+
+      var aPos = gl.getAttribLocation(prog, "aPos");
+      gl.enableVertexAttribArray(aPos);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+      /* ── Uniform locations ────────────────────────────────────── */
+      var uRes    = gl.getUniformLocation(prog, "uRes");
+      var uTime   = gl.getUniformLocation(prog, "uTime");
+      var uXScale = gl.getUniformLocation(prog, "uXScale");
+      var uYScale = gl.getUniformLocation(prog, "uYScale");
+      var uDist   = gl.getUniformLocation(prog, "uDist");
+
+      gl.uniform1f(uXScale, 1.0);
+      gl.uniform1f(uYScale, 0.5);
+      gl.uniform1f(uDist,   0.05);
+
+      var t = 0;
+
+      function resize() {
+        var dpr = window.devicePixelRatio || 1;
+        var w   = Math.round(window.innerWidth  * dpr);
+        var h   = Math.round(window.innerHeight * dpr);
+        canvas.width  = w;
+        canvas.height = h;
+        canvas.style.width  = window.innerWidth  + "px";
+        canvas.style.height = window.innerHeight + "px";
+        gl.viewport(0, 0, w, h);
+        gl.uniform2f(uRes, w, h);
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      /* ── Render loop ──────────────────────────────────────────── */
+      (function loop() {
+        t += 0.01;
+        gl.uniform1f(uTime, t);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        requestAnimationFrame(loop);
+      })();
+    })();
+
+
+    /* ════════════════════════════════════════════════════════════════
+       GSAP Entrance Animation — V55 Liquid Prism
+       Characters fall in one by one with 3-D rotationX flip.
+       Double-trigger: readyState check + setTimeout safety net.
+    ════════════════════════════════════════════════════════════════ */
+    function reveal() {
+      if (window._v55done) return;
+      window._v55done = true;
+
+      /* Make chars visible before GSAP takes over */
+      var chars = document.querySelectorAll(".char");
+      chars.forEach(function(c){ c.style.visibility = "visible"; });
+
+      /* Set initial states */
+      gsap.set(".char",        { opacity: 0, y: 50, rotationX: -80, transformOrigin: "50% 100% -20px" });
+      gsap.set(".label",       { opacity: 0, y: -12 });
+      gsap.set(".en-title",    { opacity: 0, y: 14 });
+      gsap.set(".rule",        { scaleX: 0, opacity: 0.7 });
+      gsap.set(".rule-bottom", { scaleX: 0, opacity: 0.7 });
+
+      var tl = gsap.timeline({ defaults: { ease: "expo.out" } });
+
+      tl
+        /* 1. label drifts down from above */
+        .to(".label",  { opacity: 1, y: 0, duration: 1.0 })
+        /* 2. top rule draws left → right */
+        .to(".rule",   { scaleX: 1, duration: 0.9, ease: "power3.inOut", transformOrigin: "left center" }, "-=0.4")
+        /* 3. Chinese characters flip in one by one (3-D) */
+        .to(".char",   {
+            opacity: 1, y: 0, rotationX: 0,
+            duration: 1.0, stagger: 0.13,
+            ease: "back.out(1.2)"
+          }, "-=0.3")
+        /* 4. English italic fades up */
+        .to(".en-title",    { opacity: 1, y: 0, duration: 0.9 }, "-=0.35")
+        /* 5. bottom rule draws right → left */
+        .to(".rule-bottom", { scaleX: 1, duration: 0.9, ease: "power3.inOut", transformOrigin: "right center" }, "-=0.55");
+    }
+
+    /* ── Double-trigger guard (Bug #3 prevention) ─────────────── */
+    if (document.readyState === "complete") {
+      reveal();
+    } else {
+      window.addEventListener("load", reveal, { once: true });
+      setTimeout(reveal, 1800);
+    }
+  </script>
+</body>
+</html>
